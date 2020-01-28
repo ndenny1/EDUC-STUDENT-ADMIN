@@ -11,7 +11,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const utils = require('./components/utils');
 const auth = require('./components/auth');
-
+const Prometheus = require('prom-client');
 dotenv.config();
 
 const JWTStrategy = require('passport-jwt').Strategy;
@@ -22,6 +22,15 @@ const apiRouter = express.Router();
 const authRouter = require('./routes/auth');
 const penRequestRouter = require('./routes/penRequest');
 const emailsRouter = require('./routes/emails');
+
+//Prometheus related config
+Prometheus.collectDefaultMetrics();
+const httpRequestDurationMicroseconds = new Prometheus.Histogram({
+  name: 'http_request_duration_ms',
+  help: 'Duration of HTTP requests in ms',
+  labelNames: ['method', 'route', 'code'],
+  buckets: [0.10, 5, 15, 50, 100, 200, 300, 400, 500]  // buckets for response time from 0.1ms to 500ms
+});
 
 //initialize app
 const app = express();
@@ -129,14 +138,32 @@ apiRouter.get('/', (_req, res) => {
     ]
   });
 });
-
+// set start time
+app.use((req, res, next) => {
+  res.locals.startEpoch = Date.now();
+  next();
+});
 //set up routing to auth and main API
 app.use(/(\/api)?/, apiRouter);
 
+apiRouter.get('/metrics', ((req, res) => {
+  res.set('Content-Type', Prometheus.register.contentType);
+  res.end(Prometheus.register.metrics());
+}));
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/penRequest', penRequestRouter);
 apiRouter.use('/emails', emailsRouter);
 
+app.use((req, res) => {
+  const responseTimeInMs = Date.now() - res.locals.startEpoch;
+  let path ='';
+  if(req.route){
+    path = req.route.path;
+  }
+  httpRequestDurationMicroseconds
+    .labels(req.method, path, String(res.statusCode))
+    .observe(responseTimeInMs);
+});
 //Handle 500 error
 app.use((err, _req, res, next) => {
   log.error(err.stack);
@@ -149,7 +176,7 @@ app.use((err, _req, res, next) => {
 
 // Handle 404 error
 app.use((_req, res) => {
-  console.log("In 404");
+  console.log('In 404');
   res.status(404).json({
     status: 404,
     message: 'Page Not Found'
