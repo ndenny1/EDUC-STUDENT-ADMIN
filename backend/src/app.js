@@ -138,6 +138,10 @@ apiRouter.get('/', (_req, res) => {
     ]
   });
 });
+apiRouter.get('/metrics', (req, res) => {
+  res.set('Content-Type', Prometheus.register.contentType);
+  res.end(Prometheus.register.metrics());
+});
 // set start time
 app.use((req, res, next) => {
   res.locals.startEpoch = Date.now();
@@ -146,10 +150,6 @@ app.use((req, res, next) => {
 //set up routing to auth and main API
 app.use(/(\/api)?/, apiRouter);
 
-apiRouter.get('/metrics', ((req, res) => {
-  res.set('Content-Type', Prometheus.register.contentType);
-  res.end(Prometheus.register.metrics());
-}));
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/penRequest', penRequestRouter);
 apiRouter.use('/emails', emailsRouter);
