@@ -34,7 +34,10 @@ const httpRequestDurationMicroseconds = new Prometheus.Histogram({
 
 //initialize app
 const app = express();
-
+app.get('/metrics', (req, res) => {
+  res.set('Content-Type', Prometheus.register.contentType);
+  res.end(Prometheus.register.metrics());
+});
 //sets security measures (headers, etc)
 app.use(cors());
 app.use(helmet());
@@ -137,10 +140,6 @@ apiRouter.get('/', (_req, res) => {
       1
     ]
   });
-});
-apiRouter.get('/metrics', (req, res) => {
-  res.set('Content-Type', Prometheus.register.contentType);
-  res.end(Prometheus.register.metrics());
 });
 // set start time
 app.use((req, res, next) => {
